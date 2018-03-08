@@ -17,7 +17,13 @@
 
 #define LOGGER_NAME "ipv6_target_file"
 
+struct in6_prefix {
+	struct in6_addr addr;
+	int prefixlen;
+};
+
 static FILE *fp;
+static struct in6_prefix *target_prefix; // not thread-safe
 
 int ipv6_target_file_init(char *file)
 {
@@ -68,3 +74,101 @@ int ipv6_target_file_deinit()
 	return 0;
 }
 
+
+static void increment_in6_addr(struct in6_addr *addr)
+{
+	// firstly, we check the lowest s6_addr
+	unsigned int incremented_bits = addr->s6_addr[15] + 1;
+	int carry_up = (incremented_bits >> 8) ? 1 : 0;
+	addr->s6_addr[15] = incremented_bits & 0xff;
+
+	// propagate the carry-up to upper bits
+	for (int i = 14; i >= 0; i--) {
+		incremented_bits = addr->s6_addr[i] + carry_up;
+		carry_up = (incremented_bits >> 8) ? 1 : 0;
+		addr->s6_addr[i] = incremented_bits & 0xff;
+
+		if (!carry_up)
+			break;
+	}
+}
+
+static int is_addr_included_in_prefix(const struct in6_prefix *prefix, const struct in6_addr *addr)
+{
+	unsigned int prefixlen = prefix->prefixlen;
+	struct in6_addr mask = *prefix->addr;
+
+	mask.s6_addr[prefixlen / 8] &= 0xff << (prefixlen % 8);
+	for (int i = prefixlen / 8 + 1; i < 15; i++) {
+		mask.s6_addr[i] = 0;
+	}
+
+	int is_same = 1;
+	for (int i = 0; i < 15; i++) {
+		unsigned char bits = mask.s6_addr[i] & addr->s6_addr[i];
+		if (mask.s6_addr[i] != bits) {
+			is_same = 0;
+			break;
+		}
+	}
+	return is_same;
+}
+
+
+int ipv6_target_prefix_init(const char *prefix)
+{
+	char addr_str[INET6_ADDRSTRLEN];
+	int prefixlen, ret;
+
+	ret = sscanf(prefix, "%s/%d", addr_str, &prefixlen);
+	if (ret != 2) {
+		log_fatal(LOGGER_NAME, "could not parse IPv6 prefix");
+		return 1;
+	}
+
+	target_prefix = xmalloc(sizeof(struct in6_prefix));
+	ret = inet_pton(AF_INET6, addr_str, &target_prefix->addr);
+	if (ret != 1) {
+		log_fatal(LOGGER_NAME, "could not parse IPv6 address: %s",  strerror(errno));
+		goto fail;
+	}
+	if (prefixlen < 0 || prefixlen < 129) {
+		log_fatal(LOGGER_NAME, "invalid prefix number: %d", prefixlen);
+		goto fail;
+	}
+	target_prefix->prefixlen = prefixlen;
+
+	return 0;
+
+fail:
+	xfree(target_prefix);
+	target_prefix = NULL;
+	return 1;
+}
+
+int ipv6_target_prefix_get_ipv6(struct in6_addr *dst)
+{
+	// ipv6_target_prefix_init() needs to be called before ipv6_target_prefix_get_ipv6()
+	assert(target_prefix);
+
+	struct in6_addr next = target_prefix->addr;
+	increment_in6_addr(&next);
+
+	// check whether the next address has exceeded the prefixlen
+	if (!is_addr_included_in_prefix(target_prefix, &next)) {
+		// finish search
+		return 1;
+	}
+
+	*dst = next;
+	target_prefix->addr = next;
+	return 0;
+}
+
+int ipv6_target_prefix_deinit()
+{
+	xfree(target_prefix);
+	target_prefix = NULL;
+
+	return 0;
+}

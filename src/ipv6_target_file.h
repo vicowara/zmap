@@ -10,8 +10,14 @@
 #ifndef IPV6_TARGET_FILE_H
 #define IPV6_TARGET_FILE_H
 
+#include <arpa/inet.h>
+
 int ipv6_target_file_init(char *file);
 int ipv6_target_file_get_ipv6(struct in6_addr *dst);
 int ipv6_target_file_deinit();
+
+int ipv6_target_prefix_init(const char *prefix);
+int ipv6_target_prefix_get_ipv6(struct in6_addr *dst);
+int ipv6_target_prefix_deinit();
 
 #endif
