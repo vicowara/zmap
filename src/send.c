@@ -463,13 +463,13 @@ int send_run(sock_t st, shard_t *s)
 			if (zconf.ipv6_target_filename) {
 				int ret = ipv6_target_file_get_ipv6(&ipv6_dst);
 				if (ret != 0) {
-					log_#define ebug("send", "send thread %hhu finished, no more target IPv6 addresses", s->thread_id);
+					log_debug("send", "send thread %hhu finished, no more target IPv6 addresses", s->thread_id);
 					goto cleanup;
 				}
 			} else if (zconf.ipv6_target_prefix) {
 				int ret = ipv6_target_prefix_get_ipv6(&ipv6_dst);
 				if (ret != 0) {
-					log_#define ebug("send", "send thread %hhu finished, no more target IPv6 addresses", s->thread_id);
+					log_debug("send", "send thread %hhu finished, no more target IPv6 addresses", s->thread_id);
 					goto cleanup;
 				}
 			}

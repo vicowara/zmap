@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "../lib/xalloc.h"
 #include "../lib/logger.h"
 
 #define LOGGER_NAME "ipv6_target_file"
@@ -79,7 +80,7 @@ static void increment_in6_addr(struct in6_addr *addr)
 {
 	// firstly, we check the lowest s6_addr
 	unsigned int incremented_bits = addr->s6_addr[15] + 1;
-	int carry_up = (incremented_bits >> 8) ? 1 : 0;
+	unsigned int carry_up = (incremented_bits >> 8) ? 1 : 0;
 	addr->s6_addr[15] = incremented_bits & 0xff;
 
 	// propagate the carry-up to upper bits
@@ -96,22 +97,25 @@ static void increment_in6_addr(struct in6_addr *addr)
 static int is_addr_included_in_prefix(const struct in6_prefix *prefix, const struct in6_addr *addr)
 {
 	unsigned int prefixlen = prefix->prefixlen;
-	struct in6_addr mask = *prefix->addr;
+	struct in6_addr net_addr = prefix->addr, copied_addr = *addr;
 
-	mask.s6_addr[prefixlen / 8] &= 0xff << (prefixlen % 8);
-	for (int i = prefixlen / 8 + 1; i < 15; i++) {
-		mask.s6_addr[i] = 0;
+	net_addr.s6_addr[prefixlen / 8] &= 0xff << (8 - (prefixlen % 8));
+	for (int i = prefixlen / 8 + 1; i < 16; i++) {
+		net_addr.s6_addr[i] = 0;
+	}
+	copied_addr.s6_addr[prefixlen / 8] &= 0xff << (8 - (prefixlen % 8));
+	for (int i = prefixlen / 8 + 1; i < 16; i++) {
+		copied_addr.s6_addr[i] = 0;
 	}
 
-	int is_same = 1;
-	for (int i = 0; i < 15; i++) {
-		unsigned char bits = mask.s6_addr[i] & addr->s6_addr[i];
-		if (mask.s6_addr[i] != bits) {
-			is_same = 0;
+	int included = 1;
+	for (int i = 0; i < 16; i++) {
+		if (net_addr.s6_addr[i] != copied_addr.s6_addr[i]) {
+			included = 0;
 			break;
 		}
 	}
-	return is_same;
+	return included;
 }
 
 
@@ -120,7 +124,7 @@ int ipv6_target_prefix_init(const char *prefix)
 	char addr_str[INET6_ADDRSTRLEN];
 	int prefixlen, ret;
 
-	ret = sscanf(prefix, "%s/%d", addr_str, &prefixlen);
+	ret = sscanf(prefix, "%[^/]/%d", addr_str, &prefixlen);
 	if (ret != 2) {
 		log_fatal(LOGGER_NAME, "could not parse IPv6 prefix");
 		return 1;
@@ -132,7 +136,7 @@ int ipv6_target_prefix_init(const char *prefix)
 		log_fatal(LOGGER_NAME, "could not parse IPv6 address: %s",  strerror(errno));
 		goto fail;
 	}
-	if (prefixlen < 0 || prefixlen < 129) {
+	if (prefixlen < 0 || 128 < prefixlen) {
 		log_fatal(LOGGER_NAME, "invalid prefix number: %d", prefixlen);
 		goto fail;
 	}
