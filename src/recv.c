@@ -161,6 +161,9 @@ int recv_run(pthread_mutex_t *recv_ready_mutex)
 	if (zconf.ipv6_target_filename) {
 		ipv6 = 1;
 	}
+	if (zconf.ipv6_target_prefix) {
+		ipv6 = 1;
+	}
 
 	log_trace("recv", "recv thread started");
 	log_debug("recv", "capturing responses on %s", zconf.iface);

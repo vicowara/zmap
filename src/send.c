@@ -98,6 +98,15 @@ iterator_t *send_init(void)
 		ipv6_target_file_init(zconf.ipv6_target_filename);
 	}
 
+	if (zconf.ipv6_target_prefix) {
+		ipv6 = 1;
+		int ret = inet_pton(AF_INET6, (char *) zconf.ipv6_source_ip, &ipv6_src);
+		if (ret != 1) {
+			log_fatal("send", "could not read valid IPv6 src address, inet_pton returned `%d'", ret);
+		}
+		ipv6_target_prefix_init(zconf.ipv6_target_prefix);
+	}
+
 	// generate a new primitive root and starting position
 	iterator_t *it;
 	uint32_t num_subshards =
@@ -292,8 +301,13 @@ int send_run(sock_t st, shard_t *s)
 	struct in6_addr ipv6_dst;
 
 	if (ipv6) {
-		ipv6_target_file_get_ipv6(&ipv6_dst);
-		probe_data = malloc(2*sizeof(struct in6_addr));
+		if (zconf.ipv6_target_filename) {
+			ipv6_target_file_get_ipv6(&ipv6_dst);
+			probe_data = malloc(2*sizeof(struct in6_addr));
+		} else if (zconf.ipv6_target_prefix) {
+			ipv6_target_prefix_get_ipv6(&ipv6_dst);
+			probe_data = malloc(2*sizeof(struct in6_addr));
+		}
 	} else {
 		current_ip = shard_get_cur_ip(s);
 
@@ -446,10 +460,18 @@ int send_run(sock_t st, shard_t *s)
 
 		// IPv6
 		if (ipv6) {
-			int ret = ipv6_target_file_get_ipv6(&ipv6_dst);
-			if (ret != 0) {
-				log_debug("send", "send thread %hhu finished, no more target IPv6 addresses", s->thread_id);
-				goto cleanup;
+			if (zconf.ipv6_target_filename) {
+				int ret = ipv6_target_file_get_ipv6(&ipv6_dst);
+				if (ret != 0) {
+					log_#define ebug("send", "send thread %hhu finished, no more target IPv6 addresses", s->thread_id);
+					goto cleanup;
+				}
+			} else if (zconf.ipv6_target_prefix) {
+				int ret = ipv6_target_prefix_get_ipv6(&ipv6_dst);
+				if (ret != 0) {
+					log_#define ebug("send", "send thread %hhu finished, no more target IPv6 addresses", s->thread_id);
+					goto cleanup;
+				}
 			}
 		} else {
 			// Get the next IP to scan
