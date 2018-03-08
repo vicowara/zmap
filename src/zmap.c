@@ -597,9 +597,14 @@ int main(int argc, char *argv[])
 	SET_IF_GIVEN(zconf.min_hitrate, min_hitrate);
 	SET_IF_GIVEN(zconf.ipv6_target_filename, ipv6_target_file);
 	SET_IF_GIVEN(zconf.ipv6_source_ip, ipv6_source_ip);
+	SET_IF_GIVEN(zconf.ipv6_target_prefix, ipv6_target_prefix);
 
 	if (zconf.ipv6_target_filename && !zconf.ipv6_source_ip) {
 		log_fatal("ipv6", "No IPv6 source address specified");
+	}
+
+	if (zconf.ipv6_target_filename && zconf.ipv6_target_prefix) {
+		log_fatal("send", "we only support either --ipv6-target-file or --ipv6-target-prefix");
 	}
 
 	if (zconf.num_retries < 0) {

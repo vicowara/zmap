@@ -124,6 +124,7 @@ struct state_conf {
 	float min_hitrate;
 	char *ipv6_source_ip;
 	char *ipv6_target_filename;
+	char *ipv6_target_prefix;
 #ifdef PFRING
 	struct {
 		pfring_zc_cluster *cluster;
